@@ -1,0 +1,50 @@
+---
+# tasks file for ec2_loadbalancer
+#
+# For Creating the Ec2 Instance 
+---
+- name: A simple Load Balanced AWS blog using the Amazon standard linux AMI
+  hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: spin up the webserver instances
+      ec2:
+        key_name: {{ key_name }} 
+        group: web
+        instance_type: {{ instance_type }} 
+        image: {{ ami_id }} 
+        region: us-west-2
+        wait: yes
+        instance_tags:
+           group: webservers
+      register: ec2_lb
+
+# For Checking ssh connection/Instance is up or not
+    - name: wait for SSH to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=10 timeout=180 state=started
+      with_items: ec2_lb.tagged_instances
+
+# Creating Loadbalncer 
+    - name: setup a simple load balancer
+      ec2_elb_lb:
+        name: aws-blog-elb
+        state: present
+        region: us-west-2
+        zones:
+          - us-west-2a
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80
+      register: awsblog-elb
+
+# Add our Instance to the Target group of the Loadbalancer
+    - name: add the  webservers to the load balancer
+      local_action: ec2_elb
+      args:
+        instance_id: "{{ item.id }}"
+        ec2_elbs: aws-blog-elb
+        state: present
+        region: us-west-2
+      with_items: ec2_lb.tagged_instances
