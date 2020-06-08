@@ -1,2 +1,5 @@
 ---
 # vars file for ec2_loadbalancer
+instance_type:
+ami_id:
+key_name:
